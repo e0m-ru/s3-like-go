@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -38,7 +38,7 @@ func (s *Storage) Save(key string, data []byte) {
 	s.files[key] = data
 
 	// Также сохраняем данные на диск
-	err := ioutil.WriteFile(STORAGE_DIR+"/"+key, data, 0644)
+	err := os.WriteFile(STORAGE_DIR+"/"+key, data, 0644)
 	if err != nil {
 		log.Printf("Ошибка при сохранении файла %s: %v", key, err)
 	}
@@ -56,7 +56,7 @@ func (s *Storage) Load(key string) ([]byte, bool) {
 	}
 
 	// Если объект не найден в памяти, пытаемся загрузить его с диска
-	data, err := ioutil.ReadFile(STORAGE_DIR + "/" + key)
+	data, err := os.ReadFile(STORAGE_DIR + "/" + key)
 	if err != nil {
 		return nil, false
 	}
@@ -77,7 +77,7 @@ func HandleUpload(w http.ResponseWriter, r *http.Request, storage *Storage) {
 	key := r.URL.Path[UPLOAD_PREFIX_LEN:]
 
 	// Читаем тело запроса (данные объекта)
-	data, err := ioutil.ReadAll(r.Body)
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Ошибка чтения данных", http.StatusInternalServerError)
 		return
@@ -125,7 +125,15 @@ func HandleList(w http.ResponseWriter, r *http.Request, storage *Storage) {
 	defer storage.mu.Unlock()
 
 	// Создаем список ключей (имен объектов)
-	keys := make([]string, 0, len(storage.files))
+	files, err := os.ReadDir(STORAGE_DIR)
+	if err != nil {
+		log.Panicf("Не получилось прочитать дерикторию %v: %v", STORAGE_DIR, err)
+	}
+
+	keys := make([]string, 0, len(storage.files)+len(files))
+	for _, val := range files {
+		keys = append(keys, val.Name())
+	}
 	for key := range storage.files {
 		keys = append(keys, key)
 	}
